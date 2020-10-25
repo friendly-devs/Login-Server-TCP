@@ -133,12 +133,6 @@ int main(int argc, char** argv)
         }
     }
 
-    if (isLoginSuccess)
-    {
-        printf("1. Log out\n");
-        printf("2. Exit\n");
-    }
-
     // cleanup
     closesocket(ConnectSocket);
     WSACleanup();

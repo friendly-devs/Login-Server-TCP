@@ -8,19 +8,32 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "FileUtils.h"
+
 #pragma comment (lib, "Ws2_32.lib")
 
 #define DEFAULT_BUFLEN 1024
+#define RESPOND_INCORRECT_PASSWORD "Incorrect password"
 #define RESPOND_SUCCESS "Login success"
 #define RESPOND_BLOCKED_USER "User was blocked"
 #define RESPOND_USERID_OR_PASSWORD_FAILD "UserId or password incorrect"
 
 const char* vetifyLogin(const char* data);
+list<User> users;
 
 int main(int argc, char** argv)
 {
+    // validate argument
     if (argc != 2) {
         printf("Please enter the port\n");
+        return 1;
+    }
+
+    // import data from file
+    users = readUsersFromFile();
+    if (users.empty())
+    {
+        printf("File is empty\n");
         return 1;
     }
 
@@ -111,12 +124,9 @@ int main(int argc, char** argv)
                 recvbuf[bytesReceived] = '\0';
             }
 
-            printf("Listened: %s\n", recvbuf);
-
-
             // Echo the buffer back to the sender
-            const char* sendBuf = "success";
-            int receivedbuflen = send(ClientSocket, sendBuf, strlen(sendBuf), 0);
+            const char* sendBuf = vetifyLogin(recvbuf);
+            send(ClientSocket, sendBuf, strlen(sendBuf), 0);
         }
 
         closesocket(ClientSocket);
@@ -133,6 +143,55 @@ const char* vetifyLogin(const char* data) {
     char userId[LENGTH];
     char password[LENGTH];
 
+    int i = 0;
+    while (data[i] != ',')
+    {
+        userId[i] = data[i];
+        i++;
+    }
+    userId[i] = '\0';
+
+    i++;
+    int offset = i;
+    while (data[i] != '\0')
+    {
+        password[i - offset] = data[i];
+        i++;
+    }
+    password[i - offset] = '\0';
+
+    std::list<User>::iterator pUser = users.begin();
+    while (pUser != users.end())
+    {
+        if (strcmp(pUser->userId, userId) == 0)
+        {
+            if (pUser->status == STATUS_INACTIVE)
+            {
+                return RESPOND_BLOCKED_USER;
+            }
+
+            if (strcmp(pUser->password, password) == 0)
+            {
+                return RESPOND_SUCCESS;
+            }
+            
+            pUser->countLoginFailed++;
+
+            if (pUser->countLoginFailed >= 3)
+            {
+                pUser->status = STATUS_INACTIVE;
+                
+                saveToFile(users);
+                return RESPOND_BLOCKED_USER;
+            }
+            else
+            {
+                return RESPOND_INCORRECT_PASSWORD;
+            }
+        }
+        
+        pUser++;
+    }
 
     return RESPOND_USERID_OR_PASSWORD_FAILD;
 }
