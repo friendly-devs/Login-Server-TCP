@@ -7,7 +7,6 @@
 #include <stdio.h>
 
 
-
 // Need to link with Ws2_32.lib, Mswsock.lib, and Advapi32.lib
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
@@ -16,6 +15,7 @@
 
 #define DEFAULT_BUFLEN 1024
 #define RESPOND_SUCCESS "Login success"
+#define RESPOND_EXIT "exit"
 
 // argv[1] ip of server
 // argv[2] port of server
@@ -130,6 +130,21 @@ int main(int argc, char** argv)
         if (0 == strcmp(recvbuf, RESPOND_SUCCESS)) {
             isLoginSuccess = true;
             break;
+        }
+    }
+
+    int answer;
+
+    while (isLoginSuccess)
+    {
+        printf("1. Log out\n");
+        scanf_s("%d", &answer);
+
+        if (1 == answer)
+        {
+            strcpy_s(sendbuf, RESPOND_EXIT);
+            send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
+            isLoginSuccess = false;
         }
     }
 

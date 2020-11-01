@@ -7,7 +7,6 @@
 #include <ws2tcpip.h>
 #include <stdlib.h>
 #include <stdio.h>
-
 #include "FileUtils.h"
 
 #pragma comment (lib, "Ws2_32.lib")
@@ -17,9 +16,13 @@
 #define RESPOND_SUCCESS "Login success"
 #define RESPOND_BLOCKED_USER "User was blocked"
 #define RESPOND_USERID_OR_PASSWORD_FAILD "UserId or password incorrect"
+#define RESPOND_EXIT "exit"
+
+list<User> users;
 
 const char* vetifyLogin(const char* data);
-list<User> users;
+
+DWORD WINAPI doLogin(LPVOID lpParam);
 
 int main(int argc, char** argv)
 {
@@ -43,7 +46,6 @@ int main(int argc, char** argv)
     int iResult;
 
     SOCKET ListenSocket = INVALID_SOCKET;
-    SOCKET ClientSocket = INVALID_SOCKET;
 
     struct addrinfo* result = NULL;
     struct addrinfo hints;
@@ -98,38 +100,15 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    char recvbuf[DEFAULT_BUFLEN + 1];
-    int recvbuflen = DEFAULT_BUFLEN;
+    DWORD thread;
+    SOCKET clientSocket = INVALID_SOCKET;
 
     while (true)
     {
         // Accept a client socket
-        ClientSocket = accept(ListenSocket, NULL, NULL);
-        if (ClientSocket == INVALID_SOCKET) {
-            printf("accept failed with error: %d\n", WSAGetLastError());
-            closesocket(ListenSocket);
-            WSACleanup();
-            return 1;
-        }
+        clientSocket = accept(ListenSocket, NULL, NULL);
 
-        while (true)
-        {
-            int bytesReceived = recv(ClientSocket, recvbuf, recvbuflen, 0);
-
-            if (bytesReceived == SOCKET_ERROR) {
-                break;
-            }
-
-            if (bytesReceived < recvbuflen) {
-                recvbuf[bytesReceived] = '\0';
-            }
-
-            // Echo the buffer back to the sender
-            const char* sendBuf = vetifyLogin(recvbuf);
-            send(ClientSocket, sendBuf, strlen(sendBuf), 0);
-        }
-
-        closesocket(ClientSocket);
+        CreateThread(NULL, 0, doLogin, (LPVOID)clientSocket, 0, &thread);
     }
 
     closesocket(ListenSocket);
@@ -194,4 +173,72 @@ const char* vetifyLogin(const char* data) {
     }
 
     return RESPOND_USERID_OR_PASSWORD_FAILD;
+}
+
+DWORD WINAPI doLogin(LPVOID lpParam)
+{
+    SOCKET clientSocket = (SOCKET)lpParam;
+
+    if (clientSocket == INVALID_SOCKET) {
+        printf("accept failed with error: %d\n", WSAGetLastError());
+        ExitThread(1);
+    }
+
+    char recvbuf[DEFAULT_BUFLEN + 1];
+    int recvbuflen = DEFAULT_BUFLEN;
+    int count = 0;
+    int maxCount = 3;
+    bool isLoginSuccess = false;
+
+    while (true)
+    {
+        if (count >= maxCount)
+        {
+            break;
+        }
+        count++;
+
+        int bytesReceived = recv(clientSocket, recvbuf, recvbuflen, 0);
+
+        if (bytesReceived == SOCKET_ERROR) {
+            break;
+        }
+
+        if (bytesReceived < recvbuflen) {
+            recvbuf[bytesReceived] = '\0';
+        }
+
+        // Repond the buffer back to the sender
+        const char* sendBuf = vetifyLogin(recvbuf);
+        send(clientSocket, sendBuf, strlen(sendBuf), 0);
+        
+        if (0 == strcmp(sendBuf, RESPOND_SUCCESS))
+        {
+            isLoginSuccess = true;
+            printf("login success: %s\n", recvbuf);
+            break;
+        }
+    }
+
+    while (isLoginSuccess)
+    {
+        int bytesReceived = recv(clientSocket, recvbuf, recvbuflen, 0);
+
+        if (bytesReceived == SOCKET_ERROR) {
+            break;
+        }
+
+        if (bytesReceived < recvbuflen) {
+            recvbuf[bytesReceived] = '\0';
+        }
+
+        if (0 == strcmp(recvbuf, RESPOND_EXIT))
+        {
+            isLoginSuccess = false;
+            printf("logout: %s\n", recvbuf);
+        }
+    }
+
+    closesocket(clientSocket);
+    ExitThread(0);
 }
