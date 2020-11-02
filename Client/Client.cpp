@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 
 #include <windows.h>
 #include <winsock2.h>
@@ -96,6 +96,7 @@ int main(int argc, char** argv)
 
     bool isLoginSuccess = false;
 
+    // chạy vòng lặp để user nhập pass và id
     for(int i=0; i<countLogin; i++) {
         printf("Enter the userId: ");
         fgets(userId, LENGTH_BUF, stdin);
@@ -137,7 +138,11 @@ int main(int argc, char** argv)
 
     while (isLoginSuccess)
     {
-        printf("1. Log out\n");
+        printf("Are you log out?\n");
+        printf("1. Yes\n");
+        printf("2. No\n");
+        printf("Enter answer: ");
+
         scanf_s("%d", &answer);
 
         if (1 == answer)

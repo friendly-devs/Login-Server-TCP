@@ -1,4 +1,4 @@
-#undef UNICODE
+﻿#undef UNICODE
 
 #define WIN32_LEAN_AND_MEAN
 
@@ -11,6 +11,7 @@
 
 #pragma comment (lib, "Ws2_32.lib")
 
+// Định nghĩa message
 #define DEFAULT_BUFLEN 1024
 #define RESPOND_INCORRECT_PASSWORD "Incorrect password"
 #define RESPOND_SUCCESS "Login success"
@@ -18,10 +19,13 @@
 #define RESPOND_USERID_OR_PASSWORD_FAILD "UserId or password incorrect"
 #define RESPOND_EXIT "exit"
 
+// Khai báo list<User>
 list<User> users;
 
+// Hàm kiểm tra đăng nhập
 const char* vetifyLogin(const char* data);
 
+// Hàm login, sẽ được chạy trong thread
 DWORD WINAPI doLogin(LPVOID lpParam);
 
 int main(int argc, char** argv)
@@ -108,6 +112,7 @@ int main(int argc, char** argv)
         // Accept a client socket
         clientSocket = accept(ListenSocket, NULL, NULL);
 
+        // Sau khi accept một client thì tạo một thread
         CreateThread(NULL, 0, doLogin, (LPVOID)clientSocket, 0, &thread);
     }
 
@@ -122,6 +127,7 @@ const char* vetifyLogin(const char* data) {
     char userId[LENGTH];
     char password[LENGTH];
 
+    // Tách userId
     int i = 0;
     while (data[i] != ',')
     {
@@ -130,6 +136,7 @@ const char* vetifyLogin(const char* data) {
     }
     userId[i] = '\0';
 
+    // Tách password
     i++;
     int offset = i;
     while (data[i] != '\0')
@@ -139,25 +146,31 @@ const char* vetifyLogin(const char* data) {
     }
     password[i - offset] = '\0';
 
+    // Duyệt trong list users
     std::list<User>::iterator pUser = users.begin();
     while (pUser != users.end())
     {
         if (strcmp(pUser->userId, userId) == 0)
         {
+            // Nếu user đã bị block thì trả về message tương ứng
             if (pUser->status == STATUS_INACTIVE)
             {
                 return RESPOND_BLOCKED_USER;
             }
 
+            // Nếu password đúng thì trả về đăng nhập thành công
             if (strcmp(pUser->password, password) == 0)
             {
                 return RESPOND_SUCCESS;
             }
             
+            // Nhập password sai
+            // Tăng biến đếm nhập password sai lên
             pUser->countLoginFailed++;
 
             if (pUser->countLoginFailed >= 3)
             {
+                // Nếu từ 3 lần đổ lên thì khóa user, lưu lại vào file
                 pUser->status = STATUS_INACTIVE;
                 
                 saveToFile(users);
@@ -172,11 +185,13 @@ const char* vetifyLogin(const char* data) {
         pUser++;
     }
 
+    // Nếu userId không trùng thì trả về mesage tương ứng
     return RESPOND_USERID_OR_PASSWORD_FAILD;
 }
 
 DWORD WINAPI doLogin(LPVOID lpParam)
 {
+    // Nhận lại socket
     SOCKET clientSocket = (SOCKET)lpParam;
 
     if (clientSocket == INVALID_SOCKET) {
@@ -198,12 +213,14 @@ DWORD WINAPI doLogin(LPVOID lpParam)
         }
         count++;
 
+        // Nhận dữ liệu từ client
         int bytesReceived = recv(clientSocket, recvbuf, recvbuflen, 0);
 
         if (bytesReceived == SOCKET_ERROR) {
             break;
         }
 
+        // Chèn kí tự kết thúc string vào cuối xâu
         if (bytesReceived < recvbuflen) {
             recvbuf[bytesReceived] = '\0';
         }
@@ -212,14 +229,16 @@ DWORD WINAPI doLogin(LPVOID lpParam)
         const char* sendBuf = vetifyLogin(recvbuf);
         send(clientSocket, sendBuf, strlen(sendBuf), 0);
         
+        // Nếu login thành công thì thoát khỏi vòng đăng nhập
         if (0 == strcmp(sendBuf, RESPOND_SUCCESS))
         {
             isLoginSuccess = true;
-            printf("login success: %s\n", recvbuf);
+            //printf("login success: %s\n", recvbuf);
             break;
         }
     }
 
+    // Chờ nhận mesage đăng xuất từ client
     while (isLoginSuccess)
     {
         int bytesReceived = recv(clientSocket, recvbuf, recvbuflen, 0);
@@ -232,13 +251,16 @@ DWORD WINAPI doLogin(LPVOID lpParam)
             recvbuf[bytesReceived] = '\0';
         }
 
+        // Kiểm tra message có phải là đăng xuất không
         if (0 == strcmp(recvbuf, RESPOND_EXIT))
         {
             isLoginSuccess = false;
-            printf("logout: %s\n", recvbuf);
+            //printf("logout: %s\n", recvbuf);
         }
     }
 
+    // Đóng socket
     closesocket(clientSocket);
+    // Thoát khỏi thread
     ExitThread(0);
 }
