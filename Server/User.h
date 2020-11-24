@@ -9,4 +9,5 @@ struct User
 	char password[LENGHT];
 	int status;
 	int countLoginFailed;
+	bool isLogin = false;
 };
